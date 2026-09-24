@@ -8,6 +8,7 @@ import net.rwhps.server.game.player.PlayerHess
 import net.rwhps.server.plugin.Plugin
 import net.rwhps.server.util.IsUtils.notIsNumeric
 import net.rwhps.server.util.game.command.CommandHandler
+import net.rwhps.server.util.log.Log
 import java.util.concurrent.TimeUnit
 
 /**
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
  * - 30 秒未回复默认拒绝
  * - 同一玩家存在待决请求期间, 不能被其他玩家再次结盟
  *
- * 开局后落队通过全量存档同步 ( SYNC/35 `allPlayerSync` ) 强制应用,
+ * 开局后落队通过房间 `runOnGameThread` + 全量存档同步 ( SYNC/35 `allPlayerSync` ) 强制应用,
  * 与 TeamChange 插件机制一致; 本插件自包含实现, 不依赖其他插件。
  */
 open class AllyRequestMain : Plugin() {
@@ -58,10 +59,23 @@ open class AllyRequestMain : Plugin() {
         Threads.closeTimeTask(SYNC_TIMER_NAME, TIMER_GROUP)
     }
 
-    /** 将 [allPlayerSync] 排进防抖窗口; 触发时仍走主线程闸门。 */
+    protected open fun warnAllianceSyncOff() {
+        Log.warn(
+            "[AllyRequest] ConfigServer.enableAllianceGameThreadSync 未打开：" +
+                "开局结盟改队仍在网络线程 SYNC，可能卡死。请与本插件一起打开该选项。"
+        )
+    }
+
+    override fun onEnable() {
+        if (!Data.configServer.enableAllianceGameThreadSync) {
+            warnAllianceSyncOff()
+        }
+    }
+
+    /** 将 [allPlayerSync] 排进防抖窗口; 触发时走房间游戏线程闸门。 */
     private fun requestAllPlayerSync(hps: AbstractGameModule) {
         scheduleSyncDebounce {
-            hps.gameFunction.suspendMainThreadOperations {
+            hps.room.runOnGameThread {
                 hps.gameLinkFunction.allPlayerSync()
             }
         }
@@ -159,7 +173,7 @@ open class AllyRequestMain : Plugin() {
             }
 
             val started = hps.room.isStartGame
-            hps.gameFunction.suspendMainThreadOperations {
+            hps.room.runOnGameThread {
                 AllyRequestService.applyTeamChange(player, initiator.team, started) {
                     requestAllPlayerSync(hps)
                 }
@@ -170,6 +184,7 @@ open class AllyRequestMain : Plugin() {
 
             player.sendSystemMessage("你已同意 ${initiator.name} 的结盟请求, 加入了其队伍")
             initiator.sendSystemMessage("玩家 ${player.name} 同意了你的结盟请求, 已加入你的队伍")
+            Log.clog("[AllyRequest] 玩家 ${player.name} 同意了 ${initiator.name} 的结盟请求, 已加入其队伍")
         }
 
         handler.register("n", "#拒绝结盟请求") { _: Array<String>, player: PlayerHess ->
@@ -200,7 +215,7 @@ open class AllyRequestMain : Plugin() {
             AllyRequestService.removeRequest(targetIndex)
             return
         }
-        hps.gameFunction.suspendMainThreadOperations {
+        hps.room.runOnGameThread {
             AllyRequestService.removeRequest(targetIndex)
             val target = hps.room.playerManage.getPlayer(targetIndex)
             val initiator = hps.room.playerManage.getPlayer(request.initiatorIndex)

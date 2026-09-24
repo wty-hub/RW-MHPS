@@ -12,10 +12,20 @@
 - `<席位>`：1-based 玩家席位
 - `<队伍>`：1-based 队伍编号（内部存储为 0-based，与内置 `team` 一致）
 
+## 开关
+
+开局改队安全依赖 `ConfigServer.json`：
+
+```json
+"enableAllianceGameThreadSync": true
+```
+
+默认已为 `true`。关闭后开局改队 SYNC 在网络线程执行，可能卡死；插件启动时会打警告。
+
 ## 原理
 
 - 大厅：修改玩家同盟字段后由 TEAM_LIST(115) 正常同步（与内置 `team` 一致）
-- 开局后：修改 `player.team` 后调用 `allPlayerSync()`，广播 SYNC(35) 全量 gameSave，全员重载网络存档，强制应用新队伍
+- 开局后：`ServerRoom.runOnGameThread` 修改 `player.team` 后调用 `allPlayerSync()`，广播 SYNC(35) 全量 gameSave
 
 ## 注意事项
 

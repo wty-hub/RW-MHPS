@@ -18,10 +18,15 @@ import net.rwhps.server.data.global.Data
 import net.rwhps.server.game.GameMaps
 import net.rwhps.server.game.event.game.ServerHessStartPort
 import net.rwhps.server.game.headless.core.link.AbstractLinkGameNet
+import net.rwhps.server.plugin.hessclient.HessClientConnect
+import net.rwhps.server.plugin.hessclient.HessClientIdentity
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.plugin.internal.headless.inject.core.GameEngine
+import net.rwhps.server.plugin.internal.headless.inject.core.HessClientActions
 import net.rwhps.server.util.inline.findField
 import net.rwhps.server.util.log.Log
 import java.io.IOException
+import java.util.UUID
 import com.corrodinggames.rts.gameFramework.j.ao as ServerAcceptRunnable
 
 /**
@@ -33,22 +38,36 @@ internal class LinkGameNet: AbstractLinkGameNet {
 
     override fun newConnect(ip: String, name: String) {
         try {
-            //val settingsEngine = GameEngine.settingsEngine
             val netEngine = GameEngine.netEngine
-
-            //settingsEngine.lastNetworkPlayerName = name
-
-            //val playerName = settingsEngine.lastNetworkPlayerName
-
+            if (HessClientMode.enabled) {
+                val uuid = HessClientMode.uuid.ifBlank {
+                    Data.core.serverConnectUuid.ifBlank { UUID.randomUUID().toString() }
+                }
+                HessClientIdentity.apply({ k, v -> GameEngine.settingsEngine.setValueDynamic(k, v) }, name, uuid)
+            }
             netEngine.y = name
-            val kVar2 = ad.b(ip, false)
+            val forceTcp = HessClientMode.enabled && HessClientConnect.FORCE_TCP
+            val kVar2 = ad.b(ip, forceTcp)
             netEngine.a(kVar2)
-            val it: Iterator<*> = netEngine.aM.iterator()
-            while (it.hasNext()) {
-                (it.next() as c).i = true
+            if (!HessClientMode.enabled) {
+                val it: Iterator<*> = netEngine.aM.iterator()
+                while (it.hasNext()) {
+                    (it.next() as c).i = true
+                }
+            } else {
+                Log.clog("[hess-client] newConnect $ip name=$name B=${netEngine.B} C=${netEngine.C} aM=${netEngine.aM.size}")
+                HessClientActions.scheduleAfterConnect()
             }
         } catch (e2: IOException) {
             Log.error("[GameCore] NewConnect Error", e2)
+            if (HessClientMode.enabled) {
+                HessClientMode.markDone()
+            }
+        } catch (e: Exception) {
+            Log.error("[GameCore] NewConnect Error", e)
+            if (HessClientMode.enabled) {
+                HessClientMode.markDone()
+            }
         }
     }
 

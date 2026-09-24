@@ -135,7 +135,6 @@ class TeamChangeCommandTest {
 
         assertEquals(1, target.team)
         assertEquals(1, module.syncCalls)
-        assertEquals(1, module.suspendRuns)
         assertTrue(admin.messages.any { it.contains("已强制同步") })
     }
 

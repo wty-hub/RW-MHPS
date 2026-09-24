@@ -12,12 +12,15 @@ package net.rwhps.server.util.game
 import net.rwhps.server.data.global.Data
 import net.rwhps.server.data.global.Statisticians
 import net.rwhps.server.net.manage.DownloadManage
+import net.rwhps.server.plugin.hessclient.HessClientConnect
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.plugin.internal.headless.service.data.HessClassPathProperties
 import net.rwhps.server.util.classload.GameModularLoadClass
 import net.rwhps.server.util.classload.GameModularReusableLoadClass
 import net.rwhps.server.util.compression.CompressionDecoderUtils
 import net.rwhps.server.util.file.FileUtils
 import net.rwhps.server.util.log.Log
+import java.io.File
 import java.lang.reflect.Method
 import kotlin.concurrent.thread
 
@@ -84,6 +87,9 @@ object GameStartInit {
                     resTask(ResMD5.GameModularReusableClass.fileUtils, "gameModularReusableClassFile", false)
                 }
                 load.readData(ResMD5.GameModularReusableClass.fileUtils)
+                if (HessClientConnect.needsSendReceiveWorkerOverlay(HessClientMode.enabled)) {
+                    overlaySendReceiveWorkersFromGameLib(load)
+                }
             } else {
                 // 加载游戏依赖
                 CompressionDecoderUtils.zipAllReadStream(GameStartInit::class.java.getResourceAsStream("/libs.zip")!!).use {
@@ -102,6 +108,31 @@ object GameStartInit {
             return false
         }
         return true
+    }
+
+    /**
+     * 用原始 game-lib 覆盖缓存里被 stub 的 ReceiveWorker/SendWorker。
+     */
+    private fun overlaySendReceiveWorkersFromGameLib(load: GameModularReusableLoadClass) {
+        val dir = File(System.getenv("HESS_CLIENT_LIBS") ?: "/app/hess-libs")
+        val gameLib = File(dir, "game-lib.jar")
+        if (!gameLib.isFile) {
+            throw IllegalStateException(
+                "hess-client 需要原始 game-lib.jar 覆盖 j.d/j.e。未找到 ${gameLib.absolutePath}",
+            )
+        }
+        java.util.zip.ZipFile(gameLib).use { zip ->
+            val overlay = HessClientConnect.overlayWorkerClassBytes { path ->
+                zip.getEntry(path)?.let { zip.getInputStream(it).readBytes() }
+            }
+            if (overlay.size != HessClientConnect.SEND_RECEIVE_WORKER_CLASSES.size) {
+                throw IllegalStateException("game-lib.jar 缺少 Send/ReceiveWorker: found=${overlay.keys}")
+            }
+            overlay.forEach { (internal, bytes) ->
+                load.addClassBytes(internal.replace("/", "."), bytes, true)
+            }
+            Log.clog("[hess-client] overlay ${overlay.keys} from ${gameLib.absolutePath}")
+        }
     }
 
     fun start(load: GameModularLoadClass) {

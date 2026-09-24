@@ -9,34 +9,48 @@
 
 package net.rwhps.server.dependent.redirections.game
 
+import net.rwhps.server.data.global.Data
 import net.rwhps.server.util.log.Log
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 把需要碰游戏世界的操作排进 Slick `updateAndRender` 之前执行,
- * 避免 Netty 线程与渲染并发重载存档把地图 [com.corrodinggames.rts.gameFramework.l.bL] 拔空。
+ * 把开局结盟改队的游戏世界操作排进该 Hess 房间的 Slick 循环执行，
+ * 避免 Netty 线程与渲染并发重载存档把地图拔空。
  *
- * 游戏循环尚未跑起来 ( [gameThread] == null ) 或调用方已在游戏线程上时直接执行,
- * 以保持启动期与嵌套调用行为。
+ * 由 [net.rwhps.server.data.bean.BeanServerConfig.enableAllianceGameThreadSync] 开关：
+ * 关闭时 [runExclusive] 在调用线程立即执行、[drain] 为空操作。
+ * 多 Hess 按 [loaderId]（Hess ClassLoader）分队列，互不 drain。
  */
 object MainThreadGate {
     const val WAIT_TIMEOUT_SECONDS = 60L
+    const val DEFAULT_LOADER_ID = "default"
 
-    private val queue = ConcurrentLinkedQueue<QueuedOp>()
+    private val gates = ConcurrentHashMap<String, GateState>()
 
-    @Volatile
-    var gameThread: Thread? = null
-        internal set
-
-    fun markGameThread() {
-        gameThread = Thread.currentThread()
+    fun enabled(): Boolean {
+        return try {
+            Data.configServer.enableAllianceGameThreadSync
+        } catch (_: UninitializedPropertyAccessException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
-    fun runExclusive(run: Runnable) {
-        val loopThread = gameThread
+    fun runExclusive(run: Runnable) = runExclusive(DEFAULT_LOADER_ID, run)
+
+    fun runExclusive(loaderId: String, run: Runnable) {
+        if (!enabled()) {
+            run.run()
+            return
+        }
+
+        val state = gates.getOrPut(loaderId) { GateState() }
+        val loopThread = state.gameThread
         if (loopThread == null || loopThread === Thread.currentThread()) {
             run.run()
             return
@@ -44,7 +58,7 @@ object MainThreadGate {
 
         val latch = CountDownLatch(1)
         val error = AtomicReference<Throwable?>()
-        queue.add(QueuedOp {
+        state.queue.add(QueuedOp {
             try {
                 run.run()
             } catch (t: Throwable) {
@@ -55,31 +69,47 @@ object MainThreadGate {
         })
 
         if (!latch.await(WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            Log.error("Hess MainThreadOperations timed out after ${WAIT_TIMEOUT_SECONDS}s")
+            Log.error("Hess AllianceGameThreadSync timed out after ${WAIT_TIMEOUT_SECONDS}s loader=$loaderId")
             return
         }
         error.get()?.let { throw it }
     }
 
+    fun drain() = drain(DEFAULT_LOADER_ID)
+
     /**
-     * 在游戏循环 `updateAndRender` 开头调用: 记下当前线程并执行排队任务。
-     * 单条任务异常只记日志, 不打断后续任务或渲染。
+     * 在该 Hess 游戏循环 `updateAndRender` 开头调用：记下当前线程并执行本 loader 的排队任务。
+     * 选项关闭时直接返回。单条任务异常只记日志，不打断后续任务或渲染。
      */
-    fun drain() {
-        markGameThread()
+    fun drain(loaderId: String) {
+        if (!enabled()) {
+            return
+        }
+        val state = gates.getOrPut(loaderId) { GateState() }
+        state.gameThread = Thread.currentThread()
         while (true) {
-            val op = queue.poll() ?: break
+            val op = state.queue.poll() ?: break
             try {
                 op.body.run()
             } catch (e: Exception) {
-                Log.error("Hess MainThreadOperations", e)
+                Log.error("Hess AllianceGameThreadSync", e)
             }
         }
     }
 
-    internal fun resetForTest() {
-        gameThread = null
-        queue.clear()
+    /** 测试用：指定 loader 的游戏线程（未 drain 前模拟 loop 已启动）。 */
+    fun setGameThreadForTest(loaderId: String, thread: Thread?) {
+        gates.getOrPut(loaderId) { GateState() }.gameThread = thread
+    }
+
+    fun resetForTest() {
+        gates.clear()
+    }
+
+    private class GateState {
+        val queue = ConcurrentLinkedQueue<QueuedOp>()
+        @Volatile
+        var gameThread: Thread? = null
     }
 
     private class QueuedOp(val body: Runnable)

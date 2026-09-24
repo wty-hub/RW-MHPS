@@ -15,6 +15,7 @@ import net.rwhps.server.game.event.core.EventListenerHost
 import net.rwhps.server.game.event.global.ServerHessLoadEvent
 import net.rwhps.server.game.manage.HeadlessModuleManage
 import net.rwhps.server.game.manage.ModManage
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.util.annotations.core.EventListenerHandler
 import net.rwhps.server.util.log.Log
 
@@ -37,6 +38,19 @@ class GameHeadlessEventGlobal: EventListenerHost {
 
         if (Data.configServer.modsLoadErrorPrint) {
             Log.clog("[${serverHessLoadEvent.loadID}]: ${serverHessLoadEvent.gameModule.gameUnitData.getRwModLoadInfo().joinToString(Data.LINE_SEPARATOR)}")
+        }
+
+        if (HessClientMode.enabled) {
+            val ip = HessClientMode.target
+            val name = HessClientMode.playerName
+            Log.clog("[hess-client] skip startHeadlessServer, newConnect $ip name=$name")
+            try {
+                serverHessLoadEvent.gameModule.gameLinkNet.newConnect(ip, name)
+            } catch (e: Exception) {
+                Log.error("[hess-client] newConnect failed", e)
+                HessClientMode.markDone()
+            }
+            return
         }
 
         var passwd: String? = null

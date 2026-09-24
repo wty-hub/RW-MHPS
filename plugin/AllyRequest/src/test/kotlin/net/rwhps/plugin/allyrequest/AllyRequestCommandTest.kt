@@ -236,8 +236,6 @@ class AllyRequestCommandTest {
 
         assertEquals(0, p1.team)
         assertEquals(1, module.syncCalls)
-        // 写 team 一次闸门 + 防抖立即 flush 时再进一次闸门
-        assertEquals(2, module.suspendRuns)
         assertTrue(AllyRequestService.pendingTargets().isEmpty())
         assertEquals(listOf(1), main.cancelled)
         assertTrue(p1.messages.any { it.contains("同意") })

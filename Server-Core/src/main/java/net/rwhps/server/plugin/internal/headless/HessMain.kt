@@ -31,6 +31,21 @@ class HessMain: Plugin() {
     override fun registerGlobalEvents(eventManage: EventGlobalManage) = eventManage.registerListener(GameHeadlessEventGlobal())
 
     override fun registerCoreCommands(handler: CommandHandler) {
+        handler.register("starthessclient", "HIDE") { _: Array<String>?, log: StrCons ->
+            if (Data.startServer) {
+                log("The server is not closed, please close")
+                return@register
+            }
+            Data.startServer = true
+            val load = GameModularReusableLoadClass(
+                Thread.currentThread().contextClassLoader, Thread.currentThread().contextClassLoader.parent
+            )
+            GameStartInit.init(load)
+            Log.clog(Data.i18NBundle.getinput("server.load.headless"))
+            HeadlessModuleManage.hpsLoader = load.toString()
+            GameStartInit.start(load)
+            Log.set(Data.config.log.uppercase(Locale.getDefault()))
+        }
         handler.register("start", "serverCommands.start") { _: Array<String>?, log: StrCons ->
             if (Data.startServer) {
                 log("The server is not closed, please close")

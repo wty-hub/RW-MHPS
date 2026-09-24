@@ -1,0 +1,12 @@
+ARG DOCKER_MIRROR=docker.m.daocloud.io/library
+
+FROM ${DOCKER_MIRROR}/eclipse-temurin:21-jre-jammy
+ENV TZ=Asia/Shanghai
+WORKDIR /app
+EXPOSE 5123
+
+COPY docker/dist/server-jar/Server-All.jar /app/Server-All.jar
+
+RUN mkdir -p /app/data/log /app/data/plugins /app/logs
+
+ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-Djava.awt.headless=true", "-jar", "/app/Server-All.jar"]

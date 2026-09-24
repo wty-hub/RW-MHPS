@@ -8,12 +8,13 @@ import net.rwhps.server.game.player.PlayerHess
 import net.rwhps.server.plugin.Plugin
 import net.rwhps.server.util.IsUtils.notIsNumeric
 import net.rwhps.server.util.game.command.CommandHandler
+import net.rwhps.server.util.log.Log
 
 /**
  * 强制修改玩家队伍插件。
  *
  * 区别于核心内置的 `team` 指令 ( 仅限大厅 ), 本插件的 `forceteam`
- * 在开局后同样可用: 修改玩家同盟字段后调用全量存档同步
+ * 在开局后同样可用: 修改玩家同盟字段后通过房间 `runOnGameThread` 调用全量存档同步
  * ( `allPlayerSync()` → SYNC/35 ) 把新的队伍关系强制同步给所有客户端。
  *
  * 注意: 开局后改队伍会导致全员重载网络存档 ( 短时卡顿 ), 属于实验性功能。
@@ -28,6 +29,19 @@ open class TeamChangeMain : Plugin() {
      */
     protected open fun resolveModule(): AbstractGameModule? =
         if (HeadlessModuleManage.initHPS()) HeadlessModuleManage.hps else null
+
+    protected open fun warnAllianceSyncOff() {
+        Log.warn(
+            "[TeamChange] ConfigServer.enableAllianceGameThreadSync 未打开：" +
+                "开局改队仍在网络线程 SYNC，可能卡死。请与本插件一起打开该选项。"
+        )
+    }
+
+    override fun onEnable() {
+        if (!Data.configServer.enableAllianceGameThreadSync) {
+            warnAllianceSyncOff()
+        }
+    }
 
     override fun registerServerClientCommands(handler: CommandHandler) {
         handler.register("forceteam", "<PlayerPosition> <Team>", "#强制修改玩家队伍(支持开局后)") { args: Array<String>, player: PlayerHess ->
@@ -60,7 +74,7 @@ open class TeamChangeMain : Plugin() {
 
             val newTeam = args[1].toInt() - 1
             val started = hps.room.isStartGame
-            hps.gameFunction.suspendMainThreadOperations {
+            hps.room.runOnGameThread {
                 TeamChangeService.apply(target, newTeam, started) {
                     hps.gameLinkFunction.allPlayerSync()
                 }
@@ -99,8 +113,10 @@ open class TeamChangeMain : Plugin() {
 
             val newTeam = args[1].toInt() - 1
             val started = hps.room.isStartGame
-            TeamChangeService.apply(target, newTeam, started) {
-                hps.gameLinkFunction.allPlayerSync()
+            hps.room.runOnGameThread {
+                TeamChangeService.apply(target, newTeam, started) {
+                    hps.gameLinkFunction.allPlayerSync()
+                }
             }
             log(
                 "已将玩家 ${target.name} (席位 $position) 的队伍修改为 ${newTeam + 1}" +

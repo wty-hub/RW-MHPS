@@ -56,6 +56,7 @@ import net.rwhps.server.game.manage.MapManage
 import net.rwhps.server.io.output.DynamicPrintStream
 import net.rwhps.server.net.NetService
 import net.rwhps.server.net.core.IRwHps
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.util.SystemSetProperty
 import net.rwhps.server.util.console.TabCompleter
 import net.rwhps.server.util.file.FileUtils.Companion.getFolder
@@ -96,6 +97,7 @@ object Main {
         SystemSetProperty.setJlineIdea()
         SystemSetProperty.setOnlyIpv4()
         SystemSetProperty.setAwtHeadless()
+        HessClientMode.applyFromArgs(args)
 
         // 夹带点私活 都给我听 UnicornPhantom
         Statisticians.addTime("Core.Main")
@@ -174,6 +176,22 @@ object Main {
         /* 加载完毕 */
         clog(Data.i18NBundle.getinput("server.load.end", Statisticians.computeTime("Core.Main")))
         PluginManage.runGlobalEventManage(ServerLoadEvent()).await()
+
+        if (HessClientMode.enabled) {
+            val watch = kotlin.concurrent.thread(name = "hess-client-watch", isDaemon = false) {
+                if (!HessClientMode.awaitDone()) {
+                    clog("[hess-client] wait timed out")
+                }
+                exitProcess(0)
+            }
+            val response = Data.SERVER_COMMAND.handleMessage("starthessclient", StrCons { obj: String -> clog(obj) })
+            if (response != null && response.type != CommandHandler.ResponseType.noCommand && response.type != CommandHandler.ResponseType.valid) {
+                clog("无法启动 Hess 无头客户端（starthessclient）")
+                HessClientMode.markDone()
+            }
+            watch.join()
+            return
+        }
 
         /* 默认直接启动服务器 */
         val response = Data.SERVER_COMMAND.handleMessage(Data.config.defStartCommand, StrCons { obj: String -> clog(obj) })

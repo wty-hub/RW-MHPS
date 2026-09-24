@@ -10,6 +10,8 @@
 package net.rwhps.server.plugin.internal.headless.inject.core
 
 import net.rwhps.server.game.headless.core.AbstractGameFast
+import net.rwhps.server.plugin.hessclient.HessClientMode
+import net.rwhps.server.plugin.hessclient.HessClientObserver
 import net.rwhps.server.plugin.internal.headless.inject.lib.PlayerConnectX
 import com.corrodinggames.rts.gameFramework.j.au as Packet
 
@@ -19,8 +21,12 @@ import com.corrodinggames.rts.gameFramework.j.au as Packet
 class GameFast: AbstractGameFast {
     override fun filteredPacket(packet: Any): Boolean {
         if (packet is Packet) {
-            val playerConnect = packet.a as PlayerConnectX?
             val type = packet.b
+            if (HessClientMode.enabled && (type == 141 || type == 140)) {
+                packet.c?.let { HessClientObserver.recordFromChatPacket(type, it) }
+            }
+            // 客户端 packet.a 是 Hess `c`，不是 PlayerConnectX
+            val playerConnect = packet.a as? PlayerConnectX
 
             if (type == 140 && playerConnect != null) {
                 return true

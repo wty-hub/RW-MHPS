@@ -85,6 +85,13 @@ data class BeanServerConfig(
     /** 目录 mod 归档缓存总上限 (MB) */
     val modTransferArchiveCacheSizeMb: Int = 512,
 
+    /**
+     * 开局后结盟/改队（AllyRequest `.jm/.y`、TeamChange `forceteam`）把 SYNC 排进该房间游戏循环，
+     * 避免与渲染并发重载存档卡死。默认 true：与本仓库一等插件 AllyRequest 的既有安全行为一致。
+     * 关闭则在调用线程立即执行（调试用）。也可用 `-Drwhps.server.config.enableAllianceGameThreadSync=false`。
+     */
+    val enableAllianceGameThreadSync: Boolean = true,
+
     /** 是否保存 RePlay */
     val saveRePlayFile: Boolean = true,
     /***/

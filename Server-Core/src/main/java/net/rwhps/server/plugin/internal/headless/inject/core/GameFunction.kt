@@ -22,7 +22,7 @@ import net.rwhps.server.util.log.Log
 class GameFunction : AbstractGameFunction {
     override fun suspendMainThreadOperations(run: Runnable) {
         try {
-            MainThreadGate.runExclusive(run)
+            MainThreadGate.runExclusive(GameEngine.data.useClassLoader.toString(), run)
         } catch (e: Exception) {
             Log.error("Hess MainThreadOperations", e)
         }

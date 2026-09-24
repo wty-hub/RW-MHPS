@@ -13,6 +13,7 @@ import net.rwhps.asm.data.MethodTypeInfoValue
 import net.rwhps.server.data.global.Data
 import net.rwhps.server.dependent.redirections.MainRedirections
 import net.rwhps.server.game.manage.HeadlessModuleManage
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.util.annotations.mark.AsmMark
 import net.rwhps.server.util.annotations.mark.GameSimulationLayer
 
@@ -51,11 +52,13 @@ class NetPacketRedirections: MainRedirections {
         @GameSimulationLayer.GameSimulationLayer_KeyWords("ReliableServerSocket")
         addAllReplace("a/a/d")
 
-        // Remove the official Socket Launcher
+        // Remove the official Socket Launcher. 客户端保留 j.d/j.e，再由 game-lib overlay 覆盖。
         @GameSimulationLayer.GameSimulationLayer_KeyWords("isIpAllowed: inetAddress==null")
-        addAllReplace("com/corrodinggames/rts/gameFramework/j/ao")
-        addAllReplace("com/corrodinggames/rts/gameFramework/j/d")
-        addAllReplace("com/corrodinggames/rts/gameFramework/j/e")
+        if (HessClientMode.shouldBindListenPort()) {
+            addAllReplace("com/corrodinggames/rts/gameFramework/j/ao")
+            addAllReplace("com/corrodinggames/rts/gameFramework/j/d")
+            addAllReplace("com/corrodinggames/rts/gameFramework/j/e")
+        }
 
     }
 }

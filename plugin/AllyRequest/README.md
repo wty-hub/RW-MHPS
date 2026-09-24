@@ -14,12 +14,22 @@
 - 30 秒内未回复 `.y`/`.n` 视为默认拒绝
 - 同一玩家存在待决结盟请求期间，不能被其他玩家再次发起结盟
 
+## 开关
+
+开局改队安全依赖 `ConfigServer.json`：
+
+```json
+"enableAllianceGameThreadSync": true
+```
+
+默认已为 `true`（本仓库 AllyRequest 为一等插件）。关闭后 `.y` 仍会改队，但 SYNC 在网络线程执行，可能卡死；插件启动时会打警告。
+
 ## 原理
 
 - 参考结盟脚本 `tti`/`tta` 的邀请流程：`.jm` 记录一条以待决请求（以目标玩家 index 为 key），
   `.y` 同意时被邀请方 `team` 字段改为发起方队伍（与脚本 `setTeamInGame(x, w.s)` 一致）
 - 大厅：修改同盟字段后由 TEAM_LIST(115) 正常同步
-- 开局后：修改 `player.team` 后调用 `allPlayerSync()`，广播 SYNC(35) 全量 gameSave，全员重载网络存档，强制应用新队伍
+- 开局后：`ServerRoom.runOnGameThread` + `allPlayerSync()`，广播 SYNC(35) 全量 gameSave
 - 连续多次同意会在 300ms 内合并为一次 SYNC，避免连着重载存档
 - 超时倒计时通过服务端定时任务实现，请求接受/拒绝/超时后均会清理
 
@@ -40,6 +50,7 @@
 
 ```bash
 ./gradlew :plugin:AllyRequest:test
+./gradlew :Server-Core:test --tests '*MainThreadGateTest*' --tests '*BeanServerConfigAllianceSyncTest*'
 ```
 
 测试覆盖：

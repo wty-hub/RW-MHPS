@@ -16,6 +16,7 @@ import net.rwhps.server.core.thread.Threads
 import net.rwhps.server.core.thread.Threads.closeTimeTask
 import net.rwhps.server.data.global.Data
 import net.rwhps.server.data.temp.ServerCacheFlag
+import net.rwhps.server.dependent.redirections.game.MainThreadGate
 import net.rwhps.server.game.GameMaps
 import net.rwhps.server.game.event.game.ServerGameOverEvent
 import net.rwhps.server.game.event.game.ServerGameOverEvent.GameOverData
@@ -45,6 +46,14 @@ class ServerRoom(
 
     val playerManage = PlayerManage(gameModule)
     val call = CallManage(gameModule)
+
+    /**
+     * 开局结盟/改队：把碰游戏世界 / SYNC 的操作排进本房间 Hess 循环。
+     * [net.rwhps.server.data.bean.BeanServerConfig.enableAllianceGameThreadSync] 关闭时在调用线程立即执行。
+     */
+    fun runOnGameThread(run: Runnable) {
+        MainThreadGate.runExclusive(gameModule.useClassLoader.toString(), run)
+    }
 
     var isStartGame = false
 

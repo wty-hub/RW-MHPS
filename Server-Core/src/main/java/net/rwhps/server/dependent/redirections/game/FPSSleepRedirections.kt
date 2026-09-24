@@ -29,7 +29,8 @@ object FPSSleepRedirections : RedirectionListener {
     var deltaMillis = 0L
 
     override fun invoke(obj: Any, desc: String, vararg args: Any?) {
-        MainThreadGate.drain()
+        // 与 ServerRoom.runOnGameThread / GameFunction 使用同一 loaderId，避免排队后永不 drain
+        MainThreadGate.drain(obj.javaClass.classLoader.toString())
         deltaMillis = args[0].toString().toLong()
 //        val fps = if (HeadlessModuleManage.initHPS()) {
 //            HeadlessModuleManage.hps.gameHessData.gameFPS

@@ -28,6 +28,7 @@ import net.rwhps.server.net.core.server.AbstractNetConnect
 import net.rwhps.server.net.core.server.AbstractNetConnectServer
 import net.rwhps.server.net.manage.DownloadManage
 import net.rwhps.server.net.netconnectprotocol.FakeRwHps
+import net.rwhps.server.plugin.hessclient.HessClientMode
 import net.rwhps.server.net.netconnectprotocol.RwHps
 import net.rwhps.server.net.netconnectprotocol.TypeRelay
 import net.rwhps.server.net.netconnectprotocol.TypeRelayRebroadcast
@@ -197,6 +198,11 @@ class Initialization {
         }
 
         private fun eula(pluginData: PluginData) {
+            if (HessClientMode.enabled || System.getProperty("rwhps.eula.accepted") == "true") {
+                pluginData["eulaVersion"] = Data.SERVER_EULA_VERSION
+                Log.clog("[hess] skip EULA prompt")
+                return
+            }
             // Eula
             if (pluginData["eulaVersion", ""] != Data.SERVER_EULA_VERSION) {
                 PrintEx.waitLicense({

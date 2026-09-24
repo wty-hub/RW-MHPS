@@ -1,12 +1,14 @@
 package net.rwhps.server.dependent.redirections.game
 
+import net.rwhps.server.data.bean.BeanServerConfig
+import net.rwhps.server.data.global.Data
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
@@ -20,11 +22,13 @@ class MainThreadGateTest {
     @BeforeEach
     fun setUp() {
         MainThreadGate.resetForTest()
+        Data.configServer = BeanServerConfig(enableAllianceGameThreadSync = true)
     }
 
     @AfterEach
     fun tearDown() {
         MainThreadGate.resetForTest()
+        Data.configServer = BeanServerConfig()
     }
 
     @Test
@@ -38,7 +42,7 @@ class MainThreadGateTest {
 
     @Test
     fun `runs inline when already on the game thread`() {
-        MainThreadGate.gameThread = Thread.currentThread()
+        MainThreadGate.drain()
         val ran = AtomicBoolean(false)
 
         MainThreadGate.runExclusive { ran.set(true) }
@@ -48,7 +52,7 @@ class MainThreadGateTest {
 
     @Test
     fun `nested exclusive call on game thread stays inline`() {
-        MainThreadGate.gameThread = Thread.currentThread()
+        MainThreadGate.drain()
         val inner = AtomicBoolean(false)
 
         MainThreadGate.runExclusive {
@@ -60,7 +64,7 @@ class MainThreadGateTest {
 
     @Test
     fun `queues work until drain on the game thread`() {
-        MainThreadGate.gameThread = Thread("placeholder-game")
+        MainThreadGate.setGameThreadForTest(MainThreadGate.DEFAULT_LOADER_ID, Thread("placeholder-game"))
         val ran = AtomicBoolean(false)
         val callerDone = CountDownLatch(1)
         val caller = Thread {
@@ -76,13 +80,12 @@ class MainThreadGateTest {
 
         assertTrue(callerDone.await(2, TimeUnit.SECONDS))
         assertTrue(ran.get())
-        assertSame(Thread.currentThread(), MainThreadGate.gameThread)
         caller.join(1000)
     }
 
     @Test
     fun `queued exception is delivered to caller and later tasks still run`() {
-        MainThreadGate.gameThread = Thread("placeholder-game")
+        MainThreadGate.setGameThreadForTest(MainThreadGate.DEFAULT_LOADER_ID, Thread("placeholder-game"))
         val barrier = CyclicBarrier(3)
         val firstError = AtomicReference<Throwable?>()
         val secondRan = AtomicBoolean(false)
@@ -115,7 +118,7 @@ class MainThreadGateTest {
 
     @Test
     fun `drain isolates a throwing task so the game loop can continue`() {
-        MainThreadGate.gameThread = Thread("placeholder-game")
+        MainThreadGate.setGameThreadForTest(MainThreadGate.DEFAULT_LOADER_ID, Thread("placeholder-game"))
         val ran = AtomicInteger(0)
         val first = CountDownLatch(1)
         val second = CountDownLatch(1)
@@ -146,10 +149,67 @@ class MainThreadGateTest {
 
     @Test
     fun `inline exception propagates to caller`() {
-        MainThreadGate.gameThread = Thread.currentThread()
+        MainThreadGate.drain()
 
         assertThrows(IllegalStateException::class.java) {
             MainThreadGate.runExclusive { throw IllegalStateException("inline") }
         }
+    }
+
+    @Test
+    @DisplayName("选项关闭：即使已有游戏线程也立即执行")
+    fun disabled_runsInlineEvenWhenGameThreadIsOther() {
+        Data.configServer = BeanServerConfig(enableAllianceGameThreadSync = false)
+        MainThreadGate.setGameThreadForTest(MainThreadGate.DEFAULT_LOADER_ID, Thread("placeholder-game"))
+        val ran = AtomicBoolean(false)
+
+        MainThreadGate.runExclusive { ran.set(true) }
+
+        assertTrue(ran.get())
+    }
+
+    @Test
+    @DisplayName("选项关闭：drain 不执行已排队任务（drain 为空操作）")
+    fun disabled_drainIsNoOp() {
+        Data.configServer = BeanServerConfig(enableAllianceGameThreadSync = false)
+        val ran = AtomicBoolean(false)
+        MainThreadGate.runExclusive { ran.set(true) }
+        assertTrue(ran.get())
+
+        ran.set(false)
+        MainThreadGate.drain()
+        assertFalse(ran.get())
+    }
+
+    @Test
+    @DisplayName("loader A 的 drain 不执行 loader B 的队列")
+    fun drainDoesNotCrossLoaders() {
+        MainThreadGate.setGameThreadForTest("A", Thread("game-A"))
+        MainThreadGate.setGameThreadForTest("B", Thread("game-B"))
+        val aRan = AtomicBoolean(false)
+        val bRan = AtomicBoolean(false)
+        val aDone = CountDownLatch(1)
+        val bDone = CountDownLatch(1)
+
+        Thread {
+            MainThreadGate.runExclusive("A") { aRan.set(true) }
+            aDone.countDown()
+        }.start()
+        Thread {
+            MainThreadGate.runExclusive("B") { bRan.set(true) }
+            bDone.countDown()
+        }.start()
+        Thread.sleep(50)
+        assertFalse(aRan.get())
+        assertFalse(bRan.get())
+
+        MainThreadGate.drain("A")
+        assertTrue(aDone.await(2, TimeUnit.SECONDS))
+        assertTrue(aRan.get())
+        assertFalse(bRan.get())
+
+        MainThreadGate.drain("B")
+        assertTrue(bDone.await(2, TimeUnit.SECONDS))
+        assertTrue(bRan.get())
     }
 }
