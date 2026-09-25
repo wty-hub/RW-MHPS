@@ -2,7 +2,7 @@
   "name": "AllyRequest",
   "author": "RW-HPS",
   "main": "net.rwhps.plugin.allyrequest.AllyRequestMain",
-  "description": "In-game alliance request: .jm <seat> to invite, target replies .y/.n within 30s. Uses ServerRoom.runOnGameThread; keep ConfigServer.enableAllianceGameThreadSync=true.",
+  "description": "In-game alliance request: .jm <seat> to invite, target replies .y/.n within 30s. maxAllianceSize defaults to 3 (0 = unlimited). Uses ServerRoom.runOnGameThread; keep ConfigServer.enableAllianceGameThreadSync=true.",
   "version": "1.0.0",
   "supportedVersions": ">= 3.0.0"
 }

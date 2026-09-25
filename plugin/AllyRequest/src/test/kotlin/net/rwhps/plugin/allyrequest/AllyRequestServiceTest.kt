@@ -131,4 +131,28 @@ class AllyRequestServiceTest {
         assertEquals(1, target.team)
         assertTrue(syncCalled)
     }
+
+    @Test
+    fun `human count includes dead allies and the joiner, skips AI`() {
+        val allies = listOf(
+            player(team = 0, index = 0),
+            TestPlayer(initialTeam = 0, index = 1, alive = false),
+            AiOnTeam(team = 0, index = 9),
+        )
+        val joining = player(team = 1, index = 2)
+
+        val count = AllyRequestService.humanCountAfterJoin(allies + joining, initiatorTeam = 0, joiningIndex = 2)
+
+        assertEquals(3, count)
+        assertFalse(AllyRequestService.exceedsMaxAllianceSize(count, maxSize = 3))
+        assertTrue(AllyRequestService.exceedsMaxAllianceSize(count, maxSize = 2))
+        assertFalse(AllyRequestService.exceedsMaxAllianceSize(count, maxSize = 0))
+        assertFalse(AllyRequestService.isCombatPlayer(TestPlayer(initialTeam = -3, index = 8)))
+        assertFalse(AllyRequestService.isCombatPlayer(TestPlayer(initialTeam = -1, index = 7)))
+        assertTrue(AllyRequestService.isCombatPlayer(player(team = 0, index = 0)))
+    }
+
+    private class AiOnTeam(team: Int, index: Int) : TestPlayer(initialTeam = team, index = index) {
+        override val isAi: Boolean = true
+    }
 }

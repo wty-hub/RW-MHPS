@@ -92,6 +92,12 @@ data class BeanServerConfig(
      */
     val enableAllianceGameThreadSync: Boolean = true,
 
+    /**
+     * 结盟后同一队伍的人类玩家上限（含阵亡，不含 AI 与观战）。
+     * 默认 3。0 表示不限制。同意时被邀请方并入发起方队伍，合并后人数超过此值则拒绝。
+     */
+    val maxAllianceSize: Int = 3,
+
     /** 是否保存 RePlay */
     val saveRePlayFile: Boolean = true,
     /***/
@@ -126,6 +132,10 @@ data class BeanServerConfig(
         if (modTransferSessionTimeoutMs <= modTransferAckTimeoutMs) {
             Log.warn("Mod transfer session timeout must exceed ACK timeout, reset to 300000ms")
             coverField("modTransferSessionTimeoutMs", 300_000L)
+        }
+        if (maxAllianceSize < 0) {
+            Log.warn("maxAllianceSize < 0, reset to 3")
+            coverField("maxAllianceSize", 3)
         }
     }
 

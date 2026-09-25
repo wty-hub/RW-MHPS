@@ -1,6 +1,7 @@
 package net.rwhps.server.data.bean
 
 import net.rwhps.server.util.inline.toGson
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -33,8 +34,17 @@ class BeanServerConfigAllianceSyncTest {
     }
 
     @Test
-    @DisplayName("无参构造默认 true")
+    @DisplayName("无参构造默认 true，结盟人数默认 3")
     fun constructorDefaultTrue() {
-        assertTrue(BeanServerConfig().enableAllianceGameThreadSync)
+        val cfg = BeanServerConfig()
+        assertTrue(cfg.enableAllianceGameThreadSync)
+        assertEquals(3, cfg.maxAllianceSize)
+    }
+
+    @Test
+    @DisplayName("maxAllianceSize 0 表示不限制")
+    fun maxAllianceSizeZero() {
+        val cfg = BeanServerConfig::class.java.toGson("""{"maxAllianceSize":0}""")
+        assertEquals(0, cfg.maxAllianceSize)
     }
 }

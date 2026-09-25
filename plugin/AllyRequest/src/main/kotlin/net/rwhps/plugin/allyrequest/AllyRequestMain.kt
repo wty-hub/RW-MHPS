@@ -116,6 +116,10 @@ open class AllyRequestMain : Plugin() {
                 player.sendSystemMessage("不能向 AI 发起结盟")
                 return@register
             }
+            if (!AllyRequestService.isCombatPlayer(player) || !AllyRequestService.isCombatPlayer(target)) {
+                player.sendSystemMessage("观战或特殊玩家不能结盟")
+                return@register
+            }
             if (!player.survive) {
                 player.sendSystemMessage("你已经阵亡, 无法发起结盟")
                 return@register
@@ -126,6 +130,10 @@ open class AllyRequestMain : Plugin() {
             }
             if (target.team == player.team) {
                 player.sendSystemMessage("你们已经在同一队伍了")
+                return@register
+            }
+            if (allianceTooLarge(hps, player.team, target.index)) {
+                player.sendSystemMessage("结盟人数不能超过 ${Data.configServer.maxAllianceSize} 人")
                 return@register
             }
 
@@ -164,11 +172,26 @@ open class AllyRequestMain : Plugin() {
                 player.sendSystemMessage("发起结盟的玩家已不在房间")
                 return@register
             }
+            if (!AllyRequestService.isCombatPlayer(player) || !AllyRequestService.isCombatPlayer(initiator)) {
+                AllyRequestService.removeRequest(player.index)
+                cancelTimeout(player.index)
+                player.sendSystemMessage("观战或特殊玩家不能结盟")
+                initiator.sendSystemMessage("玩家 ${player.name} 无法加入, 观战或特殊玩家不能结盟")
+                return@register
+            }
 
             if (initiator.team == player.team) {
                 AllyRequestService.removeRequest(player.index)
                 cancelTimeout(player.index)
                 player.sendSystemMessage("你们已经在同一队伍了")
+                return@register
+            }
+            if (allianceTooLarge(hps, initiator.team, player.index)) {
+                AllyRequestService.removeRequest(player.index)
+                cancelTimeout(player.index)
+                val limit = Data.configServer.maxAllianceSize
+                player.sendSystemMessage("结盟人数不能超过 $limit 人")
+                initiator.sendSystemMessage("玩家 ${player.name} 无法加入, 结盟人数不能超过 $limit 人")
                 return@register
             }
 
@@ -206,6 +229,14 @@ open class AllyRequestMain : Plugin() {
             player.sendSystemMessage("你已拒绝结盟请求")
             initiator?.sendSystemMessage("玩家 ${player.name} 拒绝了你的结盟请求")
         }
+    }
+
+    /** 合并后人类人数（含阵亡、不含 AI 与观战）是否超过 maxAllianceSize。0 不限制。 */
+    private fun allianceTooLarge(hps: AbstractGameModule, initiatorTeam: Int, joiningIndex: Int): Boolean {
+        val count = AllyRequestService.humanCountAfterJoin(
+            hps.room.playerManage.playerAll, initiatorTeam, joiningIndex
+        )
+        return AllyRequestService.exceedsMaxAllianceSize(count, Data.configServer.maxAllianceSize)
     }
 
     /** 30 秒超时: 默认拒绝, 清除请求并通知双方。 */

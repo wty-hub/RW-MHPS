@@ -93,7 +93,7 @@ internal class FakeGameModule : AbstractGameModule {
 }
 
 /** 记录 sendSystemMessage 的测试玩家 */
-internal class TestPlayer(
+internal open class TestPlayer(
     initialTeam: Int = 0,
     index: Int = 0,
     isAdmin: Boolean = false,

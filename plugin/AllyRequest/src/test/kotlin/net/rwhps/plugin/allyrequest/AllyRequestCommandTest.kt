@@ -203,6 +203,51 @@ class AllyRequestCommandTest {
         assertTrue(main.scheduled.isEmpty())
     }
 
+    @Test
+    fun `jm rejected when alliance would exceed maxAllianceSize`() {
+        startGame()
+        val initiator = addPlayer(team = 0, index = 0, name = "P0")
+        addPlayer(team = 0, index = 1)
+        addPlayer(team = 0, index = 2)
+        val outsider = addPlayer(team = 1, index = 3, name = "P3")
+
+        client.handleMessage("/jm 4", initiator)
+
+        assertTrue(initiator.messages.any { it.contains("不能超过 3 人") })
+        assertTrue(outsider.messages.isEmpty())
+        assertTrue(AllyRequestService.pendingTargets().isEmpty())
+    }
+
+    @Test
+    fun `jm allowed when maxAllianceSize is zero`() {
+        Data.configServer = BeanServerConfig(maxAllianceSize = 0)
+        startGame()
+        val initiator = addPlayer(team = 0, index = 0)
+        addPlayer(team = 0, index = 1)
+        addPlayer(team = 0, index = 2)
+        addPlayer(team = 1, index = 3)
+
+        client.handleMessage("/jm 4", initiator)
+
+        assertNotNull(AllyRequestService.findByTarget(3))
+    }
+
+    @Test
+    fun `jm rejected for spectator or special team`() {
+        startGame()
+        val watcher = addPlayer(team = -3, index = 0, name = "Spec")
+        val fighter = addPlayer(team = 1, index = 1, name = "P1")
+
+        client.handleMessage("/jm 2", watcher)
+        assertTrue(watcher.messages.any { it.contains("观战或特殊玩家不能结盟") })
+        assertTrue(AllyRequestService.pendingTargets().isEmpty())
+
+        watcher.messages.clear()
+        client.handleMessage("/jm 1", fighter)
+        assertTrue(fighter.messages.any { it.contains("观战或特殊玩家不能结盟") })
+        assertTrue(AllyRequestService.pendingTargets().isEmpty())
+    }
+
     // ---------- y / n ----------
 
     @Test

@@ -69,6 +69,26 @@ object AllyRequestService {
     fun clear() = pending.clear()
 
     /**
+     * 被邀请方并入发起方队伍后的人类人数（含阵亡、不含 AI、不含观战等负数队伍）。
+     * [maxAllianceSize] 为 0 时调用方不限制。
+     */
+    fun humanCountAfterJoin(players: Iterable<PlayerHess>, initiatorTeam: Int, joiningIndex: Int): Int {
+        var count = 0
+        for (player in players) {
+            if (!isCombatPlayer(player)) continue
+            if (player.team == initiatorTeam || player.index == joiningIndex) count++
+        }
+        return count
+    }
+
+    /** 观战（队伍 -3）以及其它负数队伍不能结盟。 */
+    fun isCombatPlayer(player: PlayerHess): Boolean = !player.isAi && player.team >= 0
+
+    /** [maxSize] ≤ 0 表示不限制。 */
+    fun exceedsMaxAllianceSize(humanCountAfterJoin: Int, maxSize: Int): Boolean =
+        maxSize > 0 && humanCountAfterJoin > maxSize
+
+    /**
      * 将被邀请方 [target] 移动到 [newTeam]。
      *
      * 大厅直接写字段 ( 由 TEAM_LIST/115 定期同步 ); 开局后需要全量存档同步
